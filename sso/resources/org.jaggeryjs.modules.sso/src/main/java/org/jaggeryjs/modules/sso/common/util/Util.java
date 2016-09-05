@@ -22,7 +22,9 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.opensaml.Configuration;
 import org.opensaml.DefaultBootstrap;
-import org.opensaml.saml2.core.Response;
+import org.opensaml.common.impl.SecureRandomIdentifierGenerator;
+import org.opensaml.saml2.core.*;
+import org.opensaml.saml2.core.impl.NameIDPolicyBuilder;
 import org.opensaml.xml.ConfigurationException;
 import org.opensaml.xml.XMLObject;
 import org.opensaml.xml.XMLObjectBuilder;
@@ -51,14 +53,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Properties;
 import org.opensaml.common.SignableSAMLObject;
 import org.opensaml.common.xml.SAMLConstants;
-import org.opensaml.saml2.core.Assertion;
-import org.opensaml.saml2.core.Audience;
-import org.opensaml.saml2.core.AudienceRestriction;
-import org.opensaml.saml2.core.Conditions;
 import org.opensaml.security.SAMLSignatureProfileValidator;
 import org.apache.xml.security.exceptions.XMLSecurityException;
 import org.apache.xml.security.signature.Reference;
@@ -66,11 +65,15 @@ import org.apache.xml.security.signature.XMLSignature;
 import org.apache.xml.security.utils.IdResolver;
 import org.joda.time.DateTime;
 import org.apache.commons.collections.CollectionUtils;
+import org.jaggeryjs.modules.sso.common.constants.SSOConstants;
+import org.apache.commons.lang.StringUtils;
 
 import javax.xml.namespace.QName;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.util.Random;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Util {
 
@@ -118,6 +121,7 @@ public class Util {
     }
 
 
+
     /**
      * Generates a unique Id for Authentication Requests
      *
@@ -125,19 +129,13 @@ public class Util {
      */
     public static String createID() {
 
-        byte[] bytes = new byte[20]; // 160 bits
-        random.nextBytes(bytes);
-
-        char[] chars = new char[40];
-
-        for (int i = 0; i < bytes.length; i++) {
-            int left = (bytes[i] >> 4) & 0x0f;
-            int right = bytes[i] & 0x0f;
-            chars[i * 2] = charMapping[left];
-            chars[i * 2 + 1] = charMapping[right];
+        try {
+            SecureRandomIdentifierGenerator generator = new SecureRandomIdentifierGenerator();
+            return generator.generateIdentifier();
+        } catch (NoSuchAlgorithmException e) {
+            log.warn("Error while building Secure Random ID");
         }
-
-        return String.valueOf(chars);
+        return null;
     }
 
     /**
@@ -584,6 +582,44 @@ public class Util {
             log.error("Signature contained " + apacheSig.getObjectLength() + " ds:Object child element(s)");
             throw new ValidationException("Signature contained illegal ds:Object children");
         }
+    }
+
+    /** Build NameIDPolicy object given name ID policy format
+     *
+     * @param nameIdPolicy Name ID policy format
+     * @return SAML NameIDPolicy object
+     */
+    public static NameIDPolicy buildNameIDPolicy(String nameIdPolicy) {
+        NameIDPolicy nameIDPolicyObj = new NameIDPolicyBuilder().buildObject();
+        if (!StringUtils.isEmpty(nameIdPolicy)) {
+            nameIDPolicyObj.setFormat(nameIdPolicy);
+        } else {
+            nameIDPolicyObj.setFormat(SSOConstants.NAME_ID_POLICY_DEFAULT);
+        }
+        nameIDPolicyObj.setAllowCreate(true);
+        return nameIDPolicyObj;
+    }
+
+    /**
+     * Replaces the ${} in url with system properties and returns
+     *
+     * @param acsUrl assertion consumer service url
+     * @return acsUrl with system properties replaced
+     */
+    public static String processAcsUrl(String acsUrl) {
+        //matches shortest segments that are between '{' and '}'
+        Pattern pattern = Pattern.compile("\\$\\{(.*?)\\}");
+        Matcher matcher = pattern.matcher(acsUrl);
+        while (matcher.find()) {
+            String match = matcher.group(1);
+            String property = System.getProperty(match);
+            if (property != null) {
+                acsUrl = acsUrl.replace("${" + match + "}", property);
+            } else {
+                log.warn("System Property " + match + " is not set");
+            }
+        }
+        return acsUrl;
     }
 
 }

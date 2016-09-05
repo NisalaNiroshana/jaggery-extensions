@@ -37,11 +37,11 @@ var client = {};
      */
     client.getSamlObject = function (samlResp) {
         var marshalledResponse;
-        try  {
+        try {
             var decodedResp = Util.decode(samlResp);
             marshalledResponse = Util.unmarshall(decodedResp);
         } catch (e) {
-            log.error('Unable to unmarshall SAML response',e);
+            log.error('Unable to unmarshall SAML response', e);
         }
         return marshalledResponse;
     };
@@ -51,10 +51,10 @@ var client = {};
      */
     client.validateSignature = function (samlObj, config) {
         var tDomain, tId;
-        if(config.USE_ST_KEY){
+        if (config.USE_ST_KEY) {
             tDomain = carbon.server.superTenant.domain;
             tId = carbon.server.superTenant.tenantId;
-        }else{
+        } else {
             tDomain = Util.getDomainName(samlObj);
             tId = carbon.server.tenantId({domain: tDomain});
         }
@@ -87,6 +87,17 @@ var client = {};
     };
 
     /**
+     * getting url encoded signed saml authentication request
+     */
+    client.getEncodedSignedSAMLAuthRequest = function (issuerId, destination, acsUrl, isPassive, tenantId, tenantDomain, nameIdPolicy) {
+        return Util.encode(
+            Util.marshall(
+                new Packages.org.jaggeryjs.modules.sso.common.builders.AuthReqBuilder().buildAuthenticationRequest(issuerId, destination, acsUrl,
+                    isPassive, tenantId, tenantDomain, nameIdPolicy)
+            ));
+    };
+
+    /**
      * get url encoded saml logout request
      */
     client.getEncodedSAMLLogoutRequest = function (user, sessionIndex, issuerId) {
@@ -95,6 +106,18 @@ var client = {};
                 new Packages.org.jaggeryjs.modules.sso.common.builders.LogoutRequestBuilder().buildLogoutRequest(user, sessionIndex,
                     Packages.org.jaggeryjs.modules.sso.common.constants.SSOConstants.LOGOUT_USER,
                     issuerId)));
+    };
+
+    /**
+     * get url encoded signed saml logout request
+     */
+    client.getEncodedSignedSAMLLogoutRequest = function (user, sessionIndex, issuerId, tenantId, tenantDomain, destination, nameIdFormat) {
+        return Util.encode(
+            Util.marshall(
+                new Packages.org.jaggeryjs.modules.sso.common.builders.LogoutRequestBuilder().buildLogoutRequest(user, sessionIndex,
+                    Packages.org.jaggeryjs.modules.sso.common.constants.SSOConstants.LOGOUT_USER,
+                    issuerId, tenantId, tenantDomain, destination, nameIdFormat)));
+
     };
 
     /**
